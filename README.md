@@ -36,7 +36,7 @@
 ```
 ├── main.py                  # FastAPI 入口：JWT 校验中间件、CORS、路由注册、lifespan（启动 RabbitMQ 消费者）
 ├── run.py                   # 启动脚本：配置 HF 镜像/缓存目录后拉起 uvicorn
-├── config.yaml              # 全局配置：模型、数据库、记忆参数、RabbitMQ、日志（含记忆框架调参）
+├── config.yaml.template     # 全局配置模板：复制为 config.yaml 后使用（模型、数据库、记忆框架调参，见"配置说明"）
 ├── .env.template            # 环境变量模板（API Key 等；真实 .env 不入库）
 ├── SPO/                     # 结构化对象层（State/模型/响应）
 │   ├── state.py             #   LangGraph 图状态、输入输出 Schema、路由分类
@@ -190,15 +190,50 @@ S(m) = α·R(m,q) + β·T(m) + γ·F(m) + δ
 pip install -r requirements.txt
 ```
 
-### 3. 配置
+### 3. 配置（使用说明）
+
+本项目共两份配置模板，均需**复制一份再改**，原件不入库：
 
 ```bash
-# 复制环境变量模板并填入 API Key
+# ① 环境变量：真实 API Key 都在这里
 cp .env.template .env
-# 编辑 .env：DEEPSEEK_API_KEY（对话模型）、DASHSCOPE_API_KEY（Embedding）等
 
-# 修改 config.yaml 中的数据库 / 模型 / 记忆参数（默认值可直接用于本地开发）
+# ② 全局配置：模型 / 数据库 / 记忆框架参数
+cp config.yaml.template config.yaml
 ```
+
+#### .env.template 使用说明
+
+| 变量 | 必填 | 说明 |
+| --- | --- | --- |
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` | ✅ | 主 Agent 对话模型（默认 `deepseek-v4-flash`，OpenAI 兼容协议） |
+| `DASHSCOPE_API_KEY` | ✅ | Embedding（`text-embedding-v4`，记忆片段向量化与 FAQ 检索）与视觉模型 |
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | 可选 | 若对话模型改走 OpenAI 兼容的其它服务商 |
+| `TAVILY_API_KEY` | 可选 | 联网搜索（预留） |
+| `LANGSMITH_TRACING` / `LANGSMITH_API_KEY` / `LANGSMITH_PROJECT` | 可选 | LangSmith 链路追踪 |
+| `EMAIL_AUTH_CODE` | 可选 | QQ 邮箱授权码，用于异常告警邮件（SMTP 服务器与收件人在 config 中配置） |
+
+#### config.yaml.template 使用说明
+
+复制为 `config.yaml` 后，按需修改；模板内已保留本地开发默认值，最小改动即可跑通。配置文件本身带完整注释，这里只说明**必改项**与**记忆框架相关参数**：
+
+**必改项**
+- `AMQP.rabbitmq`：RabbitMQ 的账号密码（模板已脱敏）
+- `databases.rag.milvus.conn_args.uri`：Milvus 服务地址（模板已改为 localhost 占位）
+- `email.sender / receiver`：告警邮件的发件人与收件人
+
+**★ 记忆框架相关参数（`model` 段，全部有注释）**
+
+| 参数 | 位置 | 作用与建议 |
+| --- | --- | --- |
+| `model.vocation.name` | 场景预设 | 记忆框架的**应用场景开关**，三选一：`customer service`（客服：短时记忆、快遗忘）、`collaborative creation`（协同创作：长时记忆、慢遗忘）、`accompany`（陪伴型折中），或 `customize` 完全自定义 |
+| `model.vocation.kwargs` | 自定义调参 | 仅 `customize` 模式必填，结构见模板内注释：`M(Δt)`（成熟度曲线 τ_m/c）、`T(m)`（遗忘曲线 τ/c）、`slice`（切片触发阈值）、`long-term`（归纳触发阈值） |
+| `model.summary.name` | 分片/总结模型 | 负责"对话主题切分"与"用户画像归纳"的 LLM，可与对话模型不同 |
+| `model.summary.kwargs.profile.max_input_tokens` | 基准容量 | 该模型的最大输入 token 数，`fraction` 模式的触发基准 |
+| `model.summary.pattern` | 触发模式 | `fraction`（按占比）/ `tokens`（按 token 数）/ `messages`（按消息条数） |
+| `model.summary.trigger_threshold` | 触发阈值 | fraction 建议 ≥ 0.7；tokens 建议 ≥ 10000；messages 建议 ≥ 50 |
+
+**调参建议**：三套场景预设的具体数值硬编码在 `Tools/middleware/memory/time_memory.py` 的 `_VOCATION_PARAM_MAP` 中（源码内同样有注释）。日常使用直接切 `vocation.name` 即可；只有当你想针对自己的业务精调"多久切一次片、记忆衰减多快"时，才需要用 `customize` 模式 + `kwargs` 手写参数。具体公式与含义见上文"记忆框架"章节。
 
 ### 4. 启动
 
@@ -224,4 +259,4 @@ python run.py
 
 ## License
 
-MIT
+[MIT](LICENSE)

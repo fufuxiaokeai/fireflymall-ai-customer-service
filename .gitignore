@@ -4,6 +4,9 @@
 .env.local
 *.env
 
+# ---------- 本地配置（由 config.yaml.template 复制而来，含本地凭据，不入库） ----------
+config.yaml
+
 # ---------- Python ----------
 __pycache__/
 *.py[cod]

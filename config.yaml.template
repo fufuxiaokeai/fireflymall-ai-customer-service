@@ -1,0 +1,157 @@
+# ============================================================
+# 流萤商城 AI 智能客服 —— 配置模板
+#
+# 使用方式：
+#   1. 复制本文件为 config.yaml：  cp config.yaml.template config.yaml
+#   2. 按需修改配置（本模板保留本地开发默认值，可直接运行）
+#   3. 不要提交 config.yaml（已加入 .gitignore）
+#
+# 配置分四部分：
+#   ① server / logging / redis / AMQP  —— 基础服务
+#   ② file / huggingface              —— 文件与模型缓存
+#   ③ model                           —— ★ 记忆框架相关参数都在这里（重点）
+#   ④ databases / email               —— 数据存储与告警
+# ============================================================
+
+# ---------------- ① 基础服务 ----------------
+server:
+  host: 0.0.0.0
+  port: 8000
+
+logging:
+  level: 'DEBUG'
+  file_path: './log'
+  formatter: '%(asctime)s [%(threadName)s - %(thread)d] %(levelname)s %(filename)s [%(funcName)s/%(lineno)d] %(message)s'
+  create_file: true
+  max_bytes: 5MB
+  backup_count: 2
+
+redis:
+  host: localhost
+  port: 6379
+  password: '123456'      # 本地开发默认值，请按实际环境修改
+  db: 0
+  max_connections: 20
+
+AMQP:
+  rabbitmq:
+    username: your_username
+    password: 'your_password'
+    host: localhost        # 你的 RabbitMQ 地址（原为局域网 VM 地址，已脱敏）
+    port: 5672
+    virtual_host: /
+    heartbeat: 600
+    connection_attempts: 3
+    retry_delay: 5
+
+# ---------------- ② 文件与模型缓存 ----------------
+file:
+  upload_dir: './data/uploads'
+  download_dir: './data/downloads'
+
+huggingface:
+  mirror: true                 # 使用 hf-mirror.com 镜像（国内网络建议开启）
+  download_dir: ./huggingface_cache
+
+# ---------------- ③ 模型与记忆框架参数（★重点） ----------------
+model:
+  # 主 Agent / 子专家共用的对话模型（OpenAI 兼容协议，凭据在 .env 中）
+  name: 'deepseek-v4-flash'
+  # 可选：HF 分词器 id，用于更精确的 token 计数（不配则降级为字数/3.3 估算）
+  # huggingface_id: 'Qwen/Qwen2.5-7B-Instruct'
+  params:
+    temperature: 0.8
+    extra_body:
+      thinking:
+        type: 'disabled'
+  vision:
+    name: 'qwen3.7-plus'       # 视觉模型（以图搜商品等场景）
+
+  # ★ 记忆框架 —— 应用场景（职业）选择
+  #   BalancedMultiDimensionMemory 内置三套遗忘/巩固参数预设：
+  #     collaborative creation  协同创作：记忆久、遗忘慢（长时记忆优先）
+  #     customer service        智能客服：短时记忆、快遗忘、重语义相关性（本仓库默认）
+  #     accompany               陪伴型：介于两者之间
+  #     customize               完全自定义：必须同时填写下面的 kwargs
+  vocation:
+    name: 'customer service'
+    # kwargs:  # 仅 customize 模式需要。结构与代码 time_memory.py 的 _VOCATION_PARAM_MAP 一致：
+    #   M(Δt):                 # 记忆成熟度曲线：M(Δt)=1-exp(-(Δt/τ_m)^c)
+    #     τ_m: 600             #   τ_m：时间尺度（秒），越大"成熟"越慢，切片越晚触发
+    #     c: 0.5               #   形状系数（c<1 先快后慢）
+    #   T(m):                  # 遗忘曲线（艾宾浩斯参数化）：T(m)=exp(-(Δt/τ)^c)
+    #     τ: 43200             #   τ：时间尺度（秒），越大遗忘越慢（τ 时记忆降至约 37%）
+    #     c: 0.5               #   形状系数
+    #   slice: 0.7             # 切片触发阈值（0~1）：最早消息成熟度 M ≥ 该值 → 开始 LLM 主题分片
+    #   long-term: 0.9         # 归纳触发阈值（0~1）：片段成熟度 ≥ 该值 → 纳入增量总结
+
+  # ★ 记忆框架 —— 分片/总结用模型与触发模式
+  #   （记忆的"切主题"和"归纳画像"都由这个模型完成，可与对话模型不同）
+  summary:
+    name: 'deepseek-v4-flash'
+    kwargs:
+      temperature: 1.3
+      extra_body:
+        thinking:
+          type: 'disabled'
+      profile:
+        # 记录模型的最大输入 token 数（fraction 模式的基准，请与模型实际能力一致）
+        max_input_tokens: 12800
+    # 触发"工作记忆裁剪 + 记忆检索注入"的模式，三选一：
+    #   fraction  按占比：累计 token ≥ max_input_tokens × trigger_threshold（建议阈值 ≥ 0.7）
+    #   tokens    按条数：累计 token ≥ trigger_threshold（整数，建议 ≥ 10000）
+    #   messages  按消息数：累计消息 ≥ trigger_threshold（整数，建议 ≥ 50）
+    pattern: 'fraction'
+    trigger_threshold: 0.8
+
+# ---------------- ④ 数据存储与告警 ----------------
+databases:
+  mysql:                     # 商城业务数据（用户/商品/订单，当前以测试桩数据运行）
+    host: localhost
+    port: 3306
+    user: root
+    password: '123456'       # 本地开发默认值
+    db: fireflymall
+  postgres:                  # 预留：LangGraph Checkpointer / Store 的生产存储
+    host: localhost
+    port: 5432
+    user: postgres
+    password: '123456'
+    db: fireflymall
+  rag:
+    sqlite:                  # ★ 记忆片段向量库（sqlite-vec），记忆框架的存储层
+      db_url: './database/test1.db'
+    es:                      # 预留：ES 检索（商品索引）
+      db_url: 'http://localhost:9200'
+      index_name: 'goods'
+      username: 'elastic'
+      password: '123456'
+    milvus:                  # FAQ 知识库向量检索
+      collection_name: firefly_mall_faq
+      primary_field: pk
+      metadata_field: metadata
+      text_field: text
+      conn_args:
+        uri: http://localhost:19530
+        token: root:Milvus
+        db_name: firefly_mall
+      index_params:
+        index_type: IVF_FLAT
+        metric_type: COSINE
+        params:
+          nlist: 128
+      search_params:
+        metric_type: COSINE
+        params:
+          nprobe: 10
+      level: Strong
+      drop_old: false
+
+# 邮箱告警（分片/总结异常、RabbitMQ 消息滞留超时等场景会发信到 receiver）
+email:
+  smtp: 'smtp.qq.com'
+  port: 465
+  sender: 'your_email@qq.com'
+  sender_name: '智能客服告警'
+  receiver:
+    - 'your_email@qq.com'
