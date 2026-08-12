@@ -1,5 +1,9 @@
 # 流萤商城 AI 智能客服（后端服务）
 
+<p align="center">
+  <b>中文</b> · <a href="README.en.md"><u>English</u></a>
+</p>
+
 > 流萤商城（Firefly Mall）的智能客服子系统。基于 **LangGraph + LangChain + FastAPI** 构建的多智能体（Multi-Agent）客服系统：一个主 Agent 负责"调度 + 发言"，下辖售前、售中、售后三位专家 Agent；内置自研的 **衡忆多维认知架构（BalancedMultiDimensionMemory）** 记忆框架，让客服在跨会话、跨天数的对话中真正"记住"用户。
 
 ![系统架构图](graph.png)
