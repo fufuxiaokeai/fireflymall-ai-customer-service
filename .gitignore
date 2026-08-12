@@ -1,0 +1,43 @@
+# ---------- 环境变量与密钥 ----------
+# .env 存放真实 API Key（DEEPSEEK/OPENAI/DASHSCOPE/TAVILY/LANGSMITH/邮箱授权码），严禁入库
+.env
+.env.local
+*.env
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---------- IDE ----------
+.idea/
+.vscode/
+*.iml
+
+# ---------- 前端代码（独立仓库维护，本仓库不含前端） ----------
+static/
+
+# ---------- 运行时数据与产物 ----------
+data/
+cache/
+database/
+log/
+huggingface_cache/
+*.db
+*.sqlite3
+*.db-wal
+*.db-shm
+
+# ---------- 个人笔记（面试讲稿 / 排错记录，不对外） ----------
+面试讲稿*.md
+错误处理经验.md
