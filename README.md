@@ -1,10 +1,12 @@
-# 流萤商城 AI 智能客服（后端服务）
+# 流萤商城 AI 智能客服
 
 <p align="center">
   <b>中文</b> · <a href="README.en.md"><u>English</u></a>
 </p>
 
-> 流萤商城（Firefly Mall）的智能客服子系统。基于 **LangGraph + LangChain + FastAPI** 构建的多智能体（Multi-Agent）客服系统：一个主 Agent 负责"调度 + 发言"，下辖售前、售中、售后三位专家 Agent；内置自研的 **衡忆多维认知架构（BalancedMultiDimensionMemory）** 记忆框架，让客服在跨会话、跨天数的对话中真正"记住"用户。
+> 流萤商城（Firefly Mall）的智能客服子系统。基于 **LangGraph + LangChain + FastAPI** 构建的多智能体（Multi-Agent）客服系统：一个主
+> Agent 负责"调度 + 发言"，下辖售前、售中、售后三位专家 Agent；内置自研的 **衡忆多维认知架构（BalancedMultiDimensionMemory）**
+> 记忆框架，让客服在跨会话、跨天数的对话中真正"记住"用户。
 
 ![系统架构图](graph.png)
 
@@ -12,16 +14,17 @@
 
 本项目是流萤商城的 AI 客服后端，实现了从"用户提问"到"问题解决"的完整闭环：
 
-| 能力 | 说明 |
-| --- | --- |
-| 🤖 多智能体协作 | 主 Agent 听懂需求后自动路由：售前（商品咨询 / 以图搜商品 / 智能推荐）、售中（下单 / 购物车 / 订单查询 / 发票）、售后（退换货 / 退款 / 进度查询），多领域问题可**并行指派**多个专家 |
-| 🧠 自研记忆框架 | **BalancedMultiDimensionMemory**：三层记忆架构 + 多维加权评分 + 参数化艾宾浩斯遗忘曲线 + LLM 动态调参，实现真正的跨会话长期记忆（详见下文重点模块） |
-| 💬 自然对话体验 | SSE 流式输出（打字机效果 + 工具调用提示 + 思考过程回滚），语气亲切，符合商城客服人设"小刘" |
-| 🛠 工具调用 | 主 Agent 与专家共注册 20+ 工具：FAQ 向量检索（Milvus）、商品处理、订单/购物车/发票、退换货、邮件发送等 |
-| 👨‍💼 人工客服协作 | 支持转人工、人工接管期间 AI 静默、人工回复后 AI 转达并恢复正常服务，全流程按会话线程隔离 |
-| 🔒 安全与可靠性 | JWT 双密钥轮换认证、文件路径穿越防护、RabbitMQ 错误恢复队列、邮件告警、节点重试与超时、LangGraph 节点缓存 |
+| 能力           | 说明                                                                                                        |
+|--------------|-----------------------------------------------------------------------------------------------------------|
+| 🤖 多智能体协作    | 主 Agent 听懂需求后自动路由：售前（商品咨询 / 以图搜商品 / 智能推荐）、售中（下单 / 购物车 / 订单查询 / 发票）、售后（退换货 / 退款 / 进度查询），多领域问题可**并行指派**多个专家 |
+| 🧠 自研记忆框架    | **BalancedMultiDimensionMemory**：三层记忆架构 + 多维加权评分 + 参数化艾宾浩斯遗忘曲线 + LLM 动态调参，实现真正的跨会话长期记忆（详见下文重点模块）          |
+| 💬 自然对话体验    | SSE 流式输出（打字机效果 + 工具调用提示 + 思考过程回滚），语气亲切，符合商城客服人设"小刘"                                                       |
+| 🛠 工具调用      | 主 Agent 与专家共注册 20+ 工具：FAQ 向量检索（Milvus）、商品处理、订单/购物车/发票、退换货、邮件发送等                                           |
+| 👨‍💼 人工客服协作 | 支持转人工、人工接管期间 AI 静默、人工回复后 AI 转达并恢复正常服务，全流程按会话线程隔离                                                          |
+| 🔒 安全与可靠性    | JWT 双密钥轮换认证、文件路径穿越防护、RabbitMQ 错误恢复队列、邮件告警、节点重试与超时、LangGraph 节点缓存                                          |
 
 **效果示例**（以一段真实使用场景演示）：
+
 1. 用户今天问"我家是南方比较潮湿，推荐防潮的收纳盒" → 售前专家根据偏好推荐商品，记忆框架记录下"用户在意防潮"这一偏好片段；
 2. 用户明天问"上次买的收纳盒我想退了" → 无需重复说明背景，主 Agent 自动检索到昨天的记忆片段与用户画像，售后专家直接基于上下文处理退换货；
 3. 用户性格急躁、说话简短 → 画像层记住沟通风格，后续回复自动适配。
@@ -31,7 +34,8 @@
 - **语言 / 框架**：Python 3.10+、FastAPI、Uvicorn
 - **Agent 编排**：LangGraph 1.x（手写 StateGraph）、LangChain Agents（子 Agent 用 `create_agent`）、`Send` 并行路由
 - **模型**：DeepSeek（`deepseek-v4-flash`，OpenAI 兼容协议接入）、DashScope Embedding（`text-embedding-v4`，支持视觉模型）
-- **存储**：Redis（JWT 密钥 / 记忆游标）、RabbitMQ（错误恢复队列）、SQLite + sqlite-vec（记忆片段向量库）、Milvus（FAQ 向量检索）、MySQL / PostgreSQL（商城业务数据，接口预留）
+- **存储**：Redis（JWT 密钥 / 记忆游标）、RabbitMQ（错误恢复队列）、SQLite + sqlite-vec（记忆片段向量库）、Milvus（FAQ
+  向量检索）、MySQL / PostgreSQL（商城业务数据，接口预留）
 - **流式**：SSE（`text/event-stream`）
 - **认证**：PyJWT 双密钥轮换
 
@@ -82,20 +86,22 @@
 └── graph.png                # LangGraph 系统架构图
 ```
 
-> 前端代码（Vue3）独立维护于 `static/`，未包含在本仓库中（已 gitignore）。
+> 前端代码（Vue3）独立维护于 `static/`，暂时未包含在本仓库中（已 gitignore）。
 
 ## 重点模块讲解
 
 ### ★★★ 记忆框架：BalancedMultiDimensionMemory（衡忆多维认知架构）
 
-这是本项目的核心自研模块（`Tools/middleware/memory/`），作为一个 **LangChain Agent 中间件** 挂在主 Agent 的模型调用前后，实现"记忆的分层存储 — 检索 — 巩固 — 遗忘"。设计参照了认知心理学中的 **艾宾浩斯遗忘曲线** 与 **自我参照效应**。
+这是本项目的核心自研模块（`Tools/middleware/memory/`），作为一个 **LangChain Agent 中间件** 挂在主 Agent
+的模型调用前后，实现"记忆的分层存储 — 检索 — 巩固 — 遗忘"。设计参照了认知心理学中的 **艾宾浩斯遗忘曲线** 与 **自我参照效应
+**。
 
 #### 1. 三层记忆架构
 
-| 层级 | 载体 | 内容 |
-| --- | --- | --- |
-| ① 工作记忆（短期） | 带时间戳的 messages 列表 | 当前会话的原始对话，逐轮积累 |
-| ② 记忆暂存库（待巩固） | SQLite + sqlite-vec 向量库 | 从工作记忆卸载的**原始对话切片**，带元数据（主题、类型、时间、巩固次数），是长期记忆的原材料 |
+| 层级           | 载体                            | 内容                                                                 |
+|--------------|-------------------------------|--------------------------------------------------------------------|
+| ① 工作记忆（短期）   | 带时间戳的 messages 列表             | 当前会话的原始对话，逐轮积累                                                     |
+| ② 记忆暂存库（待巩固） | SQLite + sqlite-vec 向量库       | 从工作记忆卸载的**原始对话切片**，带元数据（主题、类型、时间、巩固次数），是长期记忆的原材料                   |
 | ③ 长期记忆库（已巩固） | LangGraph Store（按 user_id 隔离） | LLM 归纳出的**结构化用户画像**（UserProfile：姓名/偏好/沟通风格/目标/价值观等 13+ 维度），高持久、高重要 |
 
 #### 2. 写入流程：成熟度触发 + LLM 主题分片
@@ -121,45 +127,57 @@
 S(m) = α·R(m,q) + β·T(m) + γ·F(m) + δ
 ```
 
-| 项 | 公式 | 含义 |
-| --- | --- | --- |
-| R(m,q) 语义相关性 | `max(0, cos(m,q) - θ_min)` | 片段与当前主题的余弦相似度（硬阈值过滤） |
-| T(m) 时间衰减 | `exp( -(Δt / τ)^c )` | **参数化艾宾浩斯遗忘曲线**：τ 越大遗忘越慢，c 控制曲线形状（c<1 先快后慢，贴合艾宾浩斯早期形状） |
-| F(m) 固有重要性 | `clamp(w0 + w1·Σ(v_i·I_type(i)) + w2·(1-exp(-refresh·k)), 0, 1)` | 类型先天重要性 × 巩固次数的后天强化；`I_type` 依据自我参照效应设定：identity=0.95 > decision=0.85 > preference=0.80 > fact=0.60 > episode=0.40 > chat=0.15 |
-| α/β/γ/δ 动态权重 | LLM 按当前对话主题实时调整，约束 `α+β+γ=1` | 客服场景 α 大（重语义），闲聊场景 β 大（重时效）——权重随场景自适应 |
+| 项            | 公式                                                               | 含义                                                                                                                             |
+|--------------|------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
+| R(m,q) 语义相关性 | `max(0, cos(m,q) - θ_min)`                                       | 片段与当前主题的余弦相似度（硬阈值过滤）                                                                                                           |
+| T(m) 时间衰减    | `exp( -(Δt / τ)^c )`                                             | **参数化艾宾浩斯遗忘曲线**：τ 越大遗忘越慢，c 控制曲线形状（c<1 先快后慢，贴合艾宾浩斯早期形状）                                                                         |
+| F(m) 固有重要性   | `clamp(w0 + w1·Σ(v_i·I_type(i)) + w2·(1-exp(-refresh·k)), 0, 1)` | 类型先天重要性 × 巩固次数的后天强化；`I_type` 依据自我参照效应设定：identity=0.95 > decision=0.85 > preference=0.80 > fact=0.60 > episode=0.40 > chat=0.15 |
+| α/β/γ/δ 动态权重 | LLM 按当前对话主题实时调整，约束 `α+β+γ=1`                                     | 客服场景 α 大（重语义），闲聊场景 β 大（重时效）——权重随场景自适应                                                                                          |
 
 检索后取 Top-K 片段注入提示词，**成功注入并辅助生成回复后触发"再巩固"**：
+
 - 该片段 `strengthen_num + 1`（落库采用先删除再添加，sqlite-vec 不支持原地更新）；
 - 刷新时间戳，变相重置其遗忘曲线起点。
 
 #### 4. 整理流程：增量归纳为长期记忆
 
 延续成熟度公式，当**最早片段成熟 AND 积累量达到阈值**时触发记忆整理：
+
 - 只对归纳游标（`last_summarized_id`，存于画像中）**之后的新片段**做增量总结，绝不重复总结；
-- LLM 产出结构化增量画像后，通过 `merge_user_profile` **智能合并**进旧画像：列表字段去重合并、字典字段递归合并、标量字段仅在非空且非默认值时覆盖——避免增量总结把未提及的字段重置为默认值。
+- LLM 产出结构化增量画像后，通过 `merge_user_profile` **智能合并**
+  进旧画像：列表字段去重合并、字典字段递归合并、标量字段仅在非空且非默认值时覆盖——避免增量总结把未提及的字段重置为默认值。
 
 #### 5. 防上下文分裂与提示词分层
 
 - 维护 `new_msg_idx` 游标，只把**未处理的增量消息**交给模型，避免整段历史反复重写系统提示词导致"上下文分裂"；
-- 提示词分三层拼接（`prompt.py`）：**静态核心（角色设定）→ 半静态画像（每轮刷新）→ 动态记忆片段（每轮变化）**，遵循缓存前缀规则，让最稳定的内容排最前，最大化模型服务端缓存命中率。
+- 提示词分三层拼接（`prompt.py`）：**静态核心（角色设定）→ 半静态画像（每轮刷新）→ 动态记忆片段（每轮变化）**
+  ，遵循缓存前缀规则，让最稳定的内容排最前，最大化模型服务端缓存命中率。
 
 #### 6. 可靠性设计
 
-- **失败兜底**：分片 / 总结的 LLM 调用失败时，消息不丢弃，投递到 RabbitMQ 错误队列（`unclassified_fragments` / `uncut_text`），消费者恢复后自动续接 Redis 游标重试；入队超 1 天未处理成功则邮件告警；
-- **场景化参数**：内置三套职业调参（`_VOCATION_PARAM_MAP`）：`customer service`（短时记忆、快遗忘）、`collaborative creation`（长时记忆、慢遗忘）、`accompany`（陪伴型折中），可通过 `config.yaml` 一键切换，也可 `customize` 全自定义；
+- **失败兜底**：分片 / 总结的 LLM 调用失败时，消息不丢弃，投递到 RabbitMQ 错误队列（`unclassified_fragments` / `uncut_text`
+  ），消费者恢复后自动续接 Redis 游标重试；入队超 1 天未处理成功则邮件告警；
+- **场景化参数**：内置三套职业调参（`_VOCATION_PARAM_MAP`）：`customer service`（短时记忆、快遗忘）、`collaborative creation`
+  （长时记忆、慢遗忘）、`accompany`（陪伴型折中），可通过 `config.yaml` 一键切换，也可 `customize` 全自定义；
 - **Token 计算工厂**：按模型自动选择 tiktoken → HuggingFace 分词器 → 字数/3.3 兜底三级降级，避免触发阈值失准。
 
 ### ★ 主 Agent：手写 StateGraph + 中间件洋葱链
 
-- `agent/main_agent.py` 手工构建 LangGraph 图：`msg_handle → chat_node → forward_node → (user / artificial / tools / 三位专家) → END`；
-- **手写"洋葱链"**（`Tools/middleware/compose.py`）：脱离 `create_agent` 手动复现官方中间件接线——before/after 钩子并入图状态、`awrap_model_call` 组合成洋葱链包住真实模型调用、`awrap_tool_call` 传给 ToolNode，并实现了 Command 顺序累积、最外层胜出的语义；
-- **路由三路径解析**：模型响应优先解析工具调用（`tool_calls`）→ 其次解析 JSON 内容 → 最后把自然语言直接当作最终回答，一次调用零额外成本完成"调度 or 发言"决策；结构异常时兜底转人工，绝不把异常抛给用户；
+- `agent/main_agent.py` 手工构建 LangGraph
+  图：`msg_handle → chat_node → forward_node → (user / artificial / tools / 三位专家) → END`；
+- **手写"洋葱链"**（`Tools/middleware/compose.py`）：脱离 `create_agent` 手动复现官方中间件接线——before/after
+  钩子并入图状态、`awrap_model_call` 组合成洋葱链包住真实模型调用、`awrap_tool_call` 传给 ToolNode，并实现了 Command
+  顺序累积、最外层胜出的语义；
+- **路由三路径解析**：模型响应优先解析工具调用（`tool_calls`）→ 其次解析 JSON 内容 →
+  最后把自然语言直接当作最终回答，一次调用零额外成本完成"调度 or 发言"决策；结构异常时兜底转人工，绝不把异常抛给用户；
 - **并行指派**：多领域问题通过 `Send` 并行派发给多个专家，每个节点带独立超时（售前 20 分钟 / 售中 10 分钟 / 售后 15 分钟）；
-- **人工客服协作**：`manual_intervention` 标记按线程隔离，人工接管期间 AI 静默（不调 LLM 直接返回固定话术），人工回复经 `human_reply` 入口注入后 AI 转达并恢复正常服务。
+- **人工客服协作**：`manual_intervention` 标记按线程隔离，人工接管期间 AI 静默（不调 LLM
+  直接返回固定话术），人工回复经 `human_reply` 入口注入后 AI 转达并恢复正常服务。
 
 ### ★ 子 Agent 专家系统
 
 三位专家均用 `create_agent` 构建，通过 `@register_tool('agent_name')` 注册机制按需装配工具：
+
 - **售前专家**：商品搜索 / 智能推荐 / 以图搜商品（读取用户业务画像 `user_person`：喜好、憎恶点、品牌与风格偏好，推荐时自动避雷）；
 - **售中专家**：辅助下单 / 购物车 / 订单状态查询 / 发票申请与下载；
 - **售后专家**：退换货规则咨询 / 退换货申请 / 售后进度查询 / 退款问题。
@@ -167,7 +185,8 @@ S(m) = α·R(m,q) + β·T(m) + γ·F(m) + δ
 ### ★ SSE 流式输出（routes/ai_chat.py）
 
 对话接口 `POST /ai/chat` 通过 SSE 推送五类事件，前端据此实现打字机效果：
-`token`（逐字增量）→ `tool`（调用了工具X）→ `rollback`（上一段是内部思考，前端回滚清除）→ `turn`（本段为最终回答，前端固定）→ `done`（结束，含 out_msg / manual_intervention）。
+`token`（逐字增量）→ `tool`（调用了工具X）→ `rollback`（上一段是内部思考，前端回滚清除）→ `turn`
+（本段为最终回答，前端固定）→ `done`（结束，含 out_msg / manual_intervention）。
 
 ### ★ 其他亮点
 
@@ -179,14 +198,14 @@ S(m) = α·R(m,q) + β·T(m) + γ·F(m) + δ
 
 ### 1. 环境依赖
 
-| 依赖 | 用途 |
-| --- | --- |
-| Python 3.10+ | 运行环境 |
-| Redis | JWT 密钥、记忆片段游标 |
-| RabbitMQ | 记忆处理失败重试队列 |
-| Milvus | FAQ 向量检索 |
+| 依赖                  | 用途                          |
+|---------------------|-----------------------------|
+| Python 3.10+        | 运行环境                        |
+| Redis               | JWT 密钥、记忆片段游标               |
+| RabbitMQ            | 记忆处理失败重试队列                  |
+| Milvus              | FAQ 向量检索                    |
 | SQLite + sqlite-vec | 记忆片段向量库（sqlite-vec 需单独安装扩展） |
-| MySQL（可选） | 商城业务数据（当前以测试桩数据运行） |
+| MySQL（可选）           | 商城业务数据（当前以测试桩数据运行）          |
 
 ### 2. 安装依赖
 
@@ -208,36 +227,40 @@ cp config.yaml.template config.yaml
 
 #### .env.template 使用说明
 
-| 变量 | 必填 | 说明 |
-| --- | --- | --- |
-| `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` | ✅ | 主 Agent 对话模型（默认 `deepseek-v4-flash`，OpenAI 兼容协议） |
-| `DASHSCOPE_API_KEY` | ✅ | Embedding（`text-embedding-v4`，记忆片段向量化与 FAQ 检索）与视觉模型 |
-| `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | 可选 | 若对话模型改走 OpenAI 兼容的其它服务商 |
-| `TAVILY_API_KEY` | 可选 | 联网搜索（预留） |
-| `LANGSMITH_TRACING` / `LANGSMITH_API_KEY` / `LANGSMITH_PROJECT` | 可选 | LangSmith 链路追踪 |
-| `EMAIL_AUTH_CODE` | 可选 | QQ 邮箱授权码，用于异常告警邮件（SMTP 服务器与收件人在 config 中配置） |
+| 变量                                                              | 必填 | 说明                                                  |
+|-----------------------------------------------------------------|----|-----------------------------------------------------|
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL`     | ✅  | 主 Agent 对话模型（默认 `deepseek-v4-flash`，OpenAI 兼容协议）    |
+| `DASHSCOPE_API_KEY`                                             | ✅  | Embedding（`text-embedding-v4`，记忆片段向量化与 FAQ 检索）与视觉模型 |
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL`           | 可选 | 若对话模型改走 OpenAI 兼容的其它服务商                             |
+| `TAVILY_API_KEY`                                                | 可选 | 联网搜索（预留）                                            |
+| `LANGSMITH_TRACING` / `LANGSMITH_API_KEY` / `LANGSMITH_PROJECT` | 可选 | LangSmith 链路追踪                                      |
+| `EMAIL_AUTH_CODE`                                               | 可选 | QQ 邮箱授权码，用于异常告警邮件（SMTP 服务器与收件人在 config 中配置）         |
 
 #### config.yaml.template 使用说明
 
-复制为 `config.yaml` 后，按需修改；模板内已保留本地开发默认值，最小改动即可跑通。配置文件本身带完整注释，这里只说明**必改项**与**记忆框架相关参数**：
+复制为 `config.yaml` 后，按需修改；模板内已保留本地开发默认值，最小改动即可跑通。配置文件本身带完整注释，这里只说明**必改项**
+与**记忆框架相关参数**：
 
 **必改项**
+
 - `AMQP.rabbitmq`：RabbitMQ 的账号密码（模板已脱敏）
 - `databases.rag.milvus.conn_args.uri`：Milvus 服务地址（模板已改为 localhost 占位）
 - `email.sender / receiver`：告警邮件的发件人与收件人
 
 **★ 记忆框架相关参数（`model` 段，全部有注释）**
 
-| 参数 | 位置 | 作用与建议 |
-| --- | --- | --- |
-| `model.vocation.name` | 场景预设 | 记忆框架的**应用场景开关**，三选一：`customer service`（客服：短时记忆、快遗忘）、`collaborative creation`（协同创作：长时记忆、慢遗忘）、`accompany`（陪伴型折中），或 `customize` 完全自定义 |
-| `model.vocation.kwargs` | 自定义调参 | 仅 `customize` 模式必填，结构见模板内注释：`M(Δt)`（成熟度曲线 τ_m/c）、`T(m)`（遗忘曲线 τ/c）、`slice`（切片触发阈值）、`long-term`（归纳触发阈值） |
-| `model.summary.name` | 分片/总结模型 | 负责"对话主题切分"与"用户画像归纳"的 LLM，可与对话模型不同 |
-| `model.summary.kwargs.profile.max_input_tokens` | 基准容量 | 该模型的最大输入 token 数，`fraction` 模式的触发基准 |
-| `model.summary.pattern` | 触发模式 | `fraction`（按占比）/ `tokens`（按 token 数）/ `messages`（按消息条数） |
-| `model.summary.trigger_threshold` | 触发阈值 | fraction 建议 ≥ 0.7；tokens 建议 ≥ 10000；messages 建议 ≥ 50 |
+| 参数                                              | 位置      | 作用与建议                                                                                                                              |
+|-------------------------------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------|
+| `model.vocation.name`                           | 场景预设    | 记忆框架的**应用场景开关**，三选一：`customer service`（客服：短时记忆、快遗忘）、`collaborative creation`（协同创作：长时记忆、慢遗忘）、`accompany`（陪伴型折中），或 `customize` 完全自定义 |
+| `model.vocation.kwargs`                         | 自定义调参   | 仅 `customize` 模式必填，结构见模板内注释：`M(Δt)`（成熟度曲线 τ_m/c）、`T(m)`（遗忘曲线 τ/c）、`slice`（切片触发阈值）、`long-term`（归纳触发阈值）                              |
+| `model.summary.name`                            | 分片/总结模型 | 负责"对话主题切分"与"用户画像归纳"的 LLM，可与对话模型不同                                                                                                  |
+| `model.summary.kwargs.profile.max_input_tokens` | 基准容量    | 该模型的最大输入 token 数，`fraction` 模式的触发基准                                                                                                |
+| `model.summary.pattern`                         | 触发模式    | `fraction`（按占比）/ `tokens`（按 token 数）/ `messages`（按消息条数）                                                                            |
+| `model.summary.trigger_threshold`               | 触发阈值    | fraction 建议 ≥ 0.7；tokens 建议 ≥ 10000；messages 建议 ≥ 50                                                                               |
 
-**调参建议**：三套场景预设的具体数值硬编码在 `Tools/middleware/memory/time_memory.py` 的 `_VOCATION_PARAM_MAP` 中（源码内同样有注释）。日常使用直接切 `vocation.name` 即可；只有当你想针对自己的业务精调"多久切一次片、记忆衰减多快"时，才需要用 `customize` 模式 + `kwargs` 手写参数。具体公式与含义见上文"记忆框架"章节。
+**调参建议**：三套场景预设的具体数值硬编码在 `Tools/middleware/memory/time_memory.py` 的 `_VOCATION_PARAM_MAP`
+中（源码内同样有注释）。日常使用直接切 `vocation.name` 即可；只有当你想针对自己的业务精调"多久切一次片、记忆衰减多快"
+时，才需要用 `customize` 模式 + `kwargs` 手写参数。具体公式与含义见上文"记忆框架"章节。
 
 ### 4. 启动
 
@@ -249,17 +272,18 @@ python run.py
 
 ### 5. 常用接口
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| POST | `/ai/chat` | 用户对话（SSE 流式） |
-| POST | `/ai/human/end` | 结束人工客服（AI 转达结语） |
-| GET | `/ai/history` | 会话历史（人工客服接手前查看上下文） |
-| POST | `/files/upload` | 文件上传 |
-| GET | `/manager/get/all/faq` | 获取 FAQ 列表 |
+| 方法   | 路径                     | 说明                 |
+|------|------------------------|--------------------|
+| POST | `/ai/chat`             | 用户对话（SSE 流式）       |
+| POST | `/ai/human/end`        | 结束人工客服（AI 转达结语）    |
+| GET  | `/ai/history`          | 会话历史（人工客服接手前查看上下文） |
+| POST | `/files/upload`        | 文件上传               |
+| GET  | `/manager/get/all/faq` | 获取 FAQ 列表          |
 
 ## 与流萤商城的关系
 
-本项目为 **流萤商城（Firefly Mall）的子系统**，独立于商城主服务部署，通过 HTTP 接口与商城的用户体系（JWT）、商品 / 订单 / 发票业务（数据库）协作。前端（Vue3）为独立工程，不在本仓库内。
+本项目为 **流萤商城（Firefly Mall）的子系统**，独立于商城主服务部署，通过 HTTP 接口与商城的用户体系（JWT）、商品 / 订单 /
+发票业务（数据库）协作。前端（Vue3）暂时不会放在本仓库内。
 
 ## License
 
