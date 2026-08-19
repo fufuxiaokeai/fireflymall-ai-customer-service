@@ -99,6 +99,11 @@
 
 > 前端代码（Vue3）独立维护于 `static/`，暂时未包含在本仓库中（已 gitignore）。
 
+> **模型文件说明**：`model/roberta_inj.onnx`（提示词注入检测模型，约 400MB）不随仓库分发，
+> 请从 [Kaggle notebook](https://www.kaggle.com/code/mrli55/preventive-prompt-word-injection-model)
+> 的 **Output** 标签页下载 `roberta_inj.onnx`，放入 `model/` 目录后运行
+> `python tests/verify_onnx.py` 验证推理与阈值指标。
+
 ## 重点模块讲解
 
 ### ★★★ 记忆框架：BalancedMultiDimensionMemory（衡忆多维认知架构）

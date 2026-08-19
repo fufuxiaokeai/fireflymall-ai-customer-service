@@ -109,6 +109,11 @@ resolved":
 > The frontend (Vue 3) is maintained as a separate project under `static/` and is **not** currently included in this warehouse (
 > gitignored).
 
+> **Model file**: `model/roberta_inj.onnx` (prompt-injection detection model, ~400MB) is not
+> distributed with this repository. Download it from the **Output** tab of the
+> [Kaggle notebook](https://www.kaggle.com/code/mrli55/preventive-prompt-word-injection-model),
+> place it under `model/`, then run `python tests/verify_onnx.py` to verify inference and thresholds.
+
 ## Key Modules
 
 ### ★★★ The Memory Framework: BalancedMultiDimensionMemory
