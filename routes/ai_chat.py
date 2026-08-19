@@ -16,8 +16,6 @@ SSE 事件格式（data 均为 JSON）：
               调用方应据此将用户转出到人工客服自己的渠道）
 - error:    出错，data.msg 为错误描述
 
-说明：不做服务端缓存——token 逐 chunk 立即发出（打字机交给前端）。
-思考文本的过滤靠"模型调用结束后的整条重放消息（additional_kwargs['stream_visible']）"
 作为段边界信号：False → 发 rollback 让前端清除该段；True → 发 turn 固定该段。
 """
 import json
@@ -35,10 +33,16 @@ from pydantic import BaseModel, Field
 from SPO.route_results import RouteResponse
 from SPO.state import UserContext
 from Tools.log_settings import LogSetting
+from Tools.stream_route_text import RouteJsonStreamFilter
 from agent.main_agent import graph
+from model.injection_detector import detector
 from routes.file import UPLOAD_DIR
 
 logger = LogSetting.create(__name__)
+
+# 注入防线拒绝提示（图外第一道）
+_INJECTION_BLOCK_MSG = '检测到您的消息包含恶意指令，已拦截。如有正常咨询需求，请重新表述。'
+_MUTE_MSG = '您的账号因多次恶意操作已被临时限制，请稍后再试，或联系人工客服。'
 
 route = APIRouter()
 control = RunControl()
@@ -97,11 +101,20 @@ async def _stream_graph(payload: dict, thread_id: str) -> AsyncIterator[str]:
     - stream_mode='values'：仅用于取最终态的 out_msg / manual_intervention，不转发给前端
     """
     last_state: dict[str, Any] = {}
+    stream_filter = RouteJsonStreamFilter()
+    # ---- 注入检测（第一道防线）----
+    check = await detector.check(thread_id, payload.get('msg', ''))
+    if check['action'] in ('hard', 'banned'):
+        yield _sse('error', {'msg': _MUTE_MSG if check['action'] == 'banned' else _INJECTION_BLOCK_MSG})
+        return
+    injection_ctx = None
+    if check['action'] in ('suspect', 'warn'):
+        injection_ctx = {'level': check['action'], 'score': round(check['score'], 3)}
     try:
         async for mode, data in graph.astream(
             payload,
             config={'configurable': {'thread_id': thread_id}},
-            context=UserContext(user_id=thread_id),
+            context=UserContext(user_id=thread_id, injection=injection_ctx),
             stream_mode=['messages', 'custom', 'values'],
             control=control,
         ):
@@ -110,15 +123,21 @@ async def _stream_graph(payload: dict, thread_id: str) -> AsyncIterator[str]:
                 if metadata.get('langgraph_node') != 'chat_node':
                     continue
                 if isinstance(chunk, AIMessageChunk):
-                    # 模型流式增量：逐 chunk 立即发出，不做服务端缓存（打字机交给前端）
+                    # 模型流式增量：经过滤器转发（打字机保留，逐 chunk 发出）
                     if isinstance(chunk.content, str) and chunk.content:
-                        yield _sse('token', {'text': chunk.content})
+                        visible_text = stream_filter.push(chunk.content)
+                        if visible_text:
+                            yield _sse('token', {'text': visible_text})
                 else:
                     # 模型调用结束的整条重放消息（chat_node 包装消息）：作为段边界信号。
                     # stream_visible=False → 本段是思考文本，前端回滚清除；
                     # True → 本段是最终回答，前端固定并更新段起点。
                     visible = chunk.additional_kwargs.get('stream_visible')
                     if visible is not None:
+                        # 段结算：补发过滤器兜底内容（畸形 JSON 场景），再发段边界
+                        leftover = stream_filter.flush()
+                        if leftover:
+                            yield _sse('token', {'text': leftover})
                         if visible:
                             yield _sse('turn', {})
                         else:

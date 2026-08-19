@@ -83,6 +83,12 @@ _VOCATION_PARAM_MAP = {
     }
 }
 
+_METERAGE_MAP = {
+    'K': 10 ** 3,
+    'M': 10 ** 6,
+    'B': 10 ** 9,
+}
+
 
 class TimeMemoryFormulaParam(BaseModel):
     w0: float = Field(default=0.1, description='基础重要性')
@@ -233,10 +239,11 @@ class BalancedMultiDimensionMemory(AgentMiddleware):
             raise ValueError("总结模式必须为 fraction, tokens, messages 中的一个")
 
         self.max_token = self._get_model_max_tokens()
+        self.kwargs.get('profile')['max_input_tokens'] = self.max_token
         if self.pattern == 'fraction':
             if self.max_token is None:
                 raise ValueError(
-                    "模型未配置最大token数，必须要在 config.yaml 中配置 model.summary.kwargs.profile.max_input_tokens")
+                    "模型未正确且合理配置最大token数，必须要在 config.yaml 中配置 model.summary.kwargs.profile.max_input_tokens")
             if not 0 <= self.trigger <= 1:
                 raise ValueError("对于 fraction 模式，总结阈值必须在 0 到 1 之间")
             if self.trigger < 0.7:
@@ -257,7 +264,7 @@ class BalancedMultiDimensionMemory(AgentMiddleware):
                 warnings.warn("对于 messages 模式，总结阈值过低，建议设置为 50 或以上，以避免反复总结")
 
         self._summary_llm = None
-        self.memory_spliter = MemoryFragmentsAiSpliter()
+        self.memory_spliter = MemoryFragmentsAiSpliter(self.model, self.kwargs)
         self.memory_fragments_rag = FragmentsMemoryRAG()
         from agent.main_agent import main_system_prompt
         self._main_system_prompt = main_system_prompt
@@ -311,6 +318,14 @@ class BalancedMultiDimensionMemory(AgentMiddleware):
         new_idx = state.get('new_msg_idx', 0)  # type: ignore
         messages = state['messages'][new_idx:]
 
+        # 自包含时间戳兜底：正常情况下用户消息由 msg_handle 入口打点，
+        # 但异常路径/外部未打点时在此补齐（缺失视为当前时间，幂等不覆盖）。
+        now = time.time()
+        for msg in messages:
+            if 'time' not in msg.additional_kwargs:
+                msg.additional_kwargs['time'] = now
+                logger.debug(f"消息缺失 time 字段，已按首次见到时间补点: {msg.content[:50]!r}")
+
         user_id = runtime.context.user_id
         self._lock.setdefault(user_id, Lock())
 
@@ -326,7 +341,8 @@ class BalancedMultiDimensionMemory(AgentMiddleware):
 
             current_tokens = self._calculate_current_token(messages, user_id)
 
-            if memory_fragments := await self.memory_spliter.atext_to_document(text=messages, user=user_id):
+            # text 必须传完整消息列表（消息偏移游标在 spliter 内部管理，见 atext_to_document 说明）
+            if memory_fragments := await self.memory_spliter.atext_to_document(text=state['messages'], user=user_id):
                 await self.memory_fragments_rag.add(memory_fragments)
 
             if self._is_primary_triggered(current_tokens, len(messages)):
@@ -440,12 +456,25 @@ class BalancedMultiDimensionMemory(AgentMiddleware):
         return result
 
     def _get_model_max_tokens(self):
-        if 'profile' in self.kwargs:
-            profile = self.kwargs['profile']
-            if 'max_input_tokens' in profile:
-                return profile['max_input_tokens']
+        if 'profile' not in self.kwargs:
             return None
-        return None
+        profile = self.kwargs['profile']
+        if 'max_input_tokens' not in profile:
+            return None
+
+        max_tokens = profile['max_input_tokens']
+        # 若是数字直接返回
+        if isinstance(max_tokens, int):
+            return max_tokens
+        try:
+            # 若是字符串，则进行转换
+            last_symbol = max_tokens[-1].upper()
+            num_tokens = int(max_tokens[:-1])
+            if last_symbol in _METERAGE_MAP:
+                return num_tokens * _METERAGE_MAP[last_symbol]
+            return None
+        except ValueError as e:
+            raise ValueError(f"max_input_tokens 无效: {e}")
 
     def _calculate_current_token(self, messages: list[BaseMessage], user_id: str = None) -> int:
         if user_id is None:

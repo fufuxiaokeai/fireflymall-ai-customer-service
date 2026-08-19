@@ -5,16 +5,19 @@
 - 打分方式：RAGAS context_recall / context_precision（LLM 判定，deepseek-v4-flash）
 - 同时输出无 LLM 的精确匹配指标：hit@5（top5 中命中的 gold 数）、recall@5、precision@5
 - ground truth 用"名称关键词命中"构建（词面 gold，对 BM25 略有利；语义查询对向量有利，两者混合取平衡）
-- 注意：必须从仓库根目录运行（config 根路径依赖 __main__.__file__）
 
-用法：python eval_retrieval_hybrid.py
+用法：python tests/eval_retrieval_hybrid.py
 """
 import json
 import os
+import sys
+from pathlib import Path
 from typing import Any, List
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # 仓库根，保证 Tools/load_config 可导入
+
 from dotenv import load_dotenv
-load_dotenv('.env')
+load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
@@ -28,8 +31,8 @@ from Tools.product_process import _es_client, _es_rag, _es_config
 TOPK = 5          # 每个配置取前 5 条做评估（贴近工具实际返回）
 FETCH = 20        # 各检索器内部候选数，融合后截取 TOPK
 
-# 查询集与人工标注 gold 从 eval_gold.json 读取（词面查询与语义改写查询混合）
-GOLD_FILE = 'eval_gold.json'
+# 查询集与人工标注 gold 从 tests/data/eval_gold.json 读取（词面查询与语义改写查询混合）
+GOLD_FILE = Path(__file__).resolve().parent / 'data' / 'eval_gold.json'
 
 
 class ESBM25Retriever(BaseRetriever):

@@ -11,6 +11,8 @@ from SPO.user import DeskSalespersonUserPersona
 class UserContext:
     """运行时上下文：主 Agent 节点与记忆中间件都依赖 user_id"""
     user_id: str
+    # 注入检测结果（图外检测传入，不进 checkpoint；chat_node 据此拼当轮旁白）
+    injection: Optional[dict] = None   # {'level': 'suspect'|'warn', 'score': float}
 
 
 class RouteResult(TypedDict):
@@ -41,6 +43,8 @@ class BaseState(TypedDict):
     problem: str
     # 线程ID
     thread_id: str
+    # 记忆清除
+    is_begin: NotRequired[bool]
 
 
 class FrontDeskSalespersonInputState(BaseState):
@@ -88,6 +92,8 @@ class RouteClassification(TypedDict):
     timeout: NotRequired[int | float]
     # 可选文件
     file_url: Optional[str]
+    # 是否进行 “失忆” 处理
+    is_begin: NotRequired[bool]
 
 
 class SummaryMemoryState(AgentState):

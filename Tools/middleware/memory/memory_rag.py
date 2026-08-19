@@ -303,9 +303,9 @@ _embeddings = DashScopeEmbeddings(model="text-embedding-v4")
 
 
 class MemoryFragmentsAiSpliter:
-    def __init__(self):
-        self.summary_name = config['model']['summary']['name']
-        self.model_kwargs = config['model']['summary']['kwargs']
+    def __init__(self, model_name: str, model_kwargs: dict[str, any]):
+        self.summary_name = model_name
+        self.model_kwargs = model_kwargs
         self.split_llm = None
         # 优先从 config.yaml 读取 Redis 配置，未配置时使用本机默认
         redis_conf = config.get('redis', {})
@@ -330,7 +330,8 @@ class MemoryFragmentsAiSpliter:
                 - episode: 描述某个经历或任务过程
                 - chat: 一般性闲聊，长期价值低
             - 片段范围：必须按照主题划分区域，且不允许跨主题。
-              scope 的 start-end 为左闭右开区间（如 0-50 表示索引 0~49 的消息）。
+              scope 的 start-end 为左闭右开区间（如 0-50 表示索引 0~49 的消息），不允许出现 0-0 / 1-1 等 start=end 的情况，因为他们相减为0，
+              若要表达一个消息，必须使用 0-1 或 1-2 等范围，同样也要符合左闭右开的基本规则
             - 每次输出要保证 主题总数 与 记忆片段配置列表 的长度一致。
             - 一个消息会对应相对应的类型并且包含消息的索引号（从0开始），
               若消息过长，将会截取字符，一般发生在tool类型的消息中，
@@ -441,28 +442,42 @@ class MemoryFragmentsAiSpliter:
             text: Optional[list[BaseMessage]] = None,
             user: Optional[str] = None,
     ) -> List[Document] | None:
-        current_index = await self.redis_con.get(f"memory_fragments:{user}") or '0'
-        current_index = int(current_index)
+        """切分结果落库为带元数据的 Document。
+
+        双游标修复（此前片段数≠消息数时切分窗口错位，导致片段丢失/重复）：
+        - memory_fragments:{user}：片段 id 基数（每片段 +1，用于文档 id 与增量归纳游标）
+        - memory_msg_offset:{user}：已切分的消息数（切分窗口偏移，成功切片后推进到 len(text)）
+        text 必须传"完整消息列表"（从会话开头），偏移由消息游标控制，保证全局单调。
+        """
+        fragment_base = int(await self.redis_con.get(f"memory_fragments:{user}") or '0')
+        msg_offset = int(await self.redis_con.get(f"memory_msg_offset:{user}") or '0')
+        # 新会话检测：消息列表比游标短 → 游标属于上一个会话的消息流，重置为 0。
+        # （偏移语义是"本消息流已切分的消息数"；同一会话内 state['messages'] 只增不减）
+        if len(text or []) < msg_offset:
+            msg_offset = 0
         if not memory_fragments:
-            memory_fragments = await self.asplit_text(text, user, current_index)
+            memory_fragments = await self.asplit_text(text, user, msg_offset)
         # 由 asplit_text 产出，一般是因为出现网络异常或者是API欠费等。
         if not memory_fragments:
             return None
         documents = []
+        fragment_id = fragment_base
         for fragment in memory_fragments:
-            current_index += 1
+            fragment_id += 1
             metadata = fragment.config.model_dump()
             # 打上用户归属与片段序号：用于跨用户检索过滤（user_id）与增量归纳游标（id）
             metadata['user_id'] = user
-            metadata['id'] = current_index
+            metadata['id'] = fragment_id
             # 文档 id 需全局唯一（sqlite 表内有 UNIQUE 约束），带 user 前缀避免多用户撞 id
             document = Document(
-                id=f"{user}-{current_index}",
+                id=f"{user}-{fragment_id}",
                 page_content=fragment.content,
                 metadata=metadata,
             )
             documents.append(document)
-        await self.redis_con.set(f"memory_fragments:{user}", str(current_index))
+        await self.redis_con.set(f"memory_fragments:{user}", str(fragment_id))
+        # 消息偏移 = 完整消息列表长度（切分失败时不推进，下轮重试）
+        await self.redis_con.set(f"memory_msg_offset:{user}", str(len(text or [])))
         return documents
 
     @staticmethod
@@ -511,7 +526,12 @@ class FragmentsMemoryRAG:
     def __init__(self):
         self.summary_llm = None
         self._init_lock = Lock()
+        # sqlite 单连接不支持并发操作：中间件的锁是"按用户"的，跨用户/恢复消费者的写入
+        # 会同时落到同一个连接上（InterfaceError）。此锁串行化所有 sql_vec 操作。
+        # （并发回归测试见 memory_middleware 独立版 tests/test_user_isolation.py）
+        self._sql_lock = asyncio.Lock()
         self.prompt = """
+        
         你现在是一个专业的总结专家，你需要根据用户的新增对话片段来总结出相对应的用户画像。
         注意：
             - 只总结片段中明确出现的用户信息，不要猜测。
@@ -540,7 +560,8 @@ class FragmentsMemoryRAG:
         if not memory:
             logger.error("记忆片段不能为空")
             return None
-        await self.sql_vec.aadd_documents(memory)
+        async with self._sql_lock:
+            await self.sql_vec.aadd_documents(memory)
 
     async def query_context_distance(
             self,
@@ -549,8 +570,9 @@ class FragmentsMemoryRAG:
             user_id: Optional[str] = None,
     ) -> List[Tuple[Document, float]]:
         """检索与 query 最相似的记忆片段，按 user_id 过滤，避免跨用户泄露"""
-        doc_scores = await self.sql_vec.asimilarity_search_with_score(
-            query=query, k=k, filter={'user_id': user_id})
+        async with self._sql_lock:
+            doc_scores = await self.sql_vec.asimilarity_search_with_score(
+                query=query, k=k, filter={'user_id': user_id})
         if not doc_scores:
             return list()
         # sqlite-vec 返回的 score 为距离，cosine 距离 = 1 - 余弦相似度
@@ -562,8 +584,10 @@ class FragmentsMemoryRAG:
         注意：
             该方法只用于更新记忆片段的强化次数，不用于更新记忆片段的内容或其他元数据
         """
-        await self.sql_vec.adelete(ids=ids)
-        await self.sql_vec.aadd_documents(documents)
+        # 删+添在同一把锁内，避免与并发写入交错破坏数据
+        async with self._sql_lock:
+            await self.sql_vec.adelete(ids=ids)
+            await self.sql_vec.aadd_documents(documents)
 
     async def long_memory_summary_by_time(
             self,
@@ -580,7 +604,8 @@ class FragmentsMemoryRAG:
         返回：(增量画像 dict, 新的游标值)；无新片段或未成熟时返回 None。
         """
         await self.create_summary_agent(model_name, **kwargs)
-        result = self.select_time_by_sqlite(m_t, m_c, long_term_value, user_id, last_summary_id)
+        async with self._sql_lock:
+            result = self.select_time_by_sqlite(m_t, m_c, long_term_value, user_id, last_summary_id)
 
         if not result:
             return None

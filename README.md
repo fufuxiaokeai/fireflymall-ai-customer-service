@@ -82,7 +82,18 @@
 │   ├── file.py              #   文件上传 / 下载
 │   └── manager.py           #   管理后台：FAQ 增删改查
 ├── load_config/             # 配置加载（yaml 解析 + .env 合并）
-├── graph_test.py            # 图结构测试脚本
+├── model/                   # 注入检测模型（ONNX 从 Kaggle 导出后手动放置）
+│   └── injection_detector.py   # 注入检测器：ONNX 推理 + 分级 + 恶意值（Redis 原子）
+├── tests/                   # 测试脚本与测试数据
+│   ├── graph_test.py        #   图结构测试脚本
+│   ├── injection_two_hop_test.py   # 二跳注入验证
+│   ├── bench_cache_rate.py  #   K-V 缓存命中率基准
+│   ├── bench_memory_recall.py      # 记忆召回基准
+│   ├── build_injection_dataset.py  # 注入数据集构建
+│   ├── check_injection_dataset.py  # 注入数据集质量检查
+│   ├── train_injection_classifier.ipynb  # Kaggle 训练 notebook（生成器 make_train_notebook.py）
+│   ├── verify_onnx.py       #   ONNX 本地验证（复现阈值指标）
+│   └── data/                #   测试数据与结果（eval_gold.json 等）
 └── graph.png                # LangGraph 系统架构图
 ```
 

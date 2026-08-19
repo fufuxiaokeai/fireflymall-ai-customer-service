@@ -1,4 +1,5 @@
 from langchain.agents import create_agent
+from langchain.agents.middleware.types import AgentState
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage
 from langgraph.runtime import Runtime
@@ -31,6 +32,8 @@ desk_salesperson_agent = create_agent(
     tools=desk_salesperson_tools,
     system_prompt=desk_salesperson_prompt,
     middleware=[ToolCallNoticeMiddleware()],
+    context_schema=UserContext,
+    state_schema=AgentState
 )
 
 
@@ -84,6 +87,51 @@ async def desk_salesperson(
                 'error': '不允许未指定thread_id字段'
             }
         }
+
+    # 判断是否清除记忆
+    if state.get("is_begin", False):
+        desk_salesperson_checkpoint = getattr(desk_salesperson_agent, 'checkpoint', None)
+        if not desk_salesperson_checkpoint:
+            return {
+                'assistant': {
+                    'source': 'desk_salesperson_service',
+                    'error': "该节点暂时不支持清除记忆功能"
+                }
+            }
+        try:
+            if hasattr(desk_salesperson_checkpoint, 'adelete_thread'):
+                await desk_salesperson_checkpoint.adelete_thread(thread_id)
+                return {
+                    'assistant': {
+                        'source': 'desk_salesperson_service',
+                        'route_answer': "记忆清除完毕，可以随时开始新一轮任务"
+                    }
+                }
+            elif hasattr(desk_salesperson_checkpoint, 'delete_thread'):
+                desk_salesperson_checkpoint.delete_thread(thread_id)
+                return {
+                    'assistant': {
+                        'source': 'desk_salesperson_service',
+                        'route_answer': "记忆清除完毕，可以随时开始新一轮任务"
+                    }
+                }
+            else:
+                logger.error(f"不支持清除记忆功能，thread_id为{thread_id}")
+                return {
+                    'assistant': {
+                        'source': 'desk_salesperson_service',
+                        'error': "该节点暂时不支持清除记忆功能"
+                    }
+                }
+        except Exception as e:
+            logger.error(f"删除失败，原因为：{e}")
+            return {
+                'assistant': {
+                    'source': 'desk_salesperson_service',
+                    'error': f"删除失败，原因为：{e}"
+                }
+            }
+
     desk_msg = state.get('problem').strip()
     if not desk_msg:
         return {

@@ -10,15 +10,9 @@ from load_config.analysis_yaml_file import AnalysisYaml
 
 def get_root_path():
     if getattr(sys, 'frozen', False):
-        root_path = os.path.dirname(sys.executable)
-    else:
-        main_module = sys.modules['__main__']
-        if hasattr(main_module, '__file__'):
-            root_path = os.path.dirname(os.path.abspath(main_module.__file__))
-        else:
-            root_path = os.path.dirname(os.path.abspath(__file__))
-
-    return root_path
+        return os.path.dirname(sys.executable)
+    # 以 load_config 模块自身位置为锚（load_config/ 恒在仓库根，向上取一级即仓库根）。
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 _BASE_DIR = get_root_path()  # 只在本文件中使用

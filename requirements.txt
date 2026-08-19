@@ -32,4 +32,19 @@ dashscope==1.25.14
 tiktoken==0.12.0
 wordninja==2.0.0
 transformers==5.8.1
+# 注入检测（ONNX 推理；tokenizers 版本变化会改变 BERT 编码 → 预测分布偏移，与训练环境保持对齐）
+onnxruntime>=1.20
+tokenizers==0.22.2
 PyJWT==2.12.1
+
+SQLAlchemy~=2.0.48
+pydantic_core~=2.46.4
+typing_extensions~=4.15.0
+torch~=2.10.0+cpu
+reportlab~=5.0.0
+APScheduler~=3.11.2
+aiofiles~=23.2.1
+starlette~=1.2.1
+jwt~=1.4.0
+anthropic~=0.86.0
+

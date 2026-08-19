@@ -63,8 +63,8 @@ class CouponInfo(Base):
 
 class UserOrderItem(Base):
     __tablename__ = 'ordercart'
-    id = Column(Integer, primary_key=True, comment='主键id')
-    orderId = Column(Integer, default=0, comment='订单ID')
+    id = Column(BigInteger, primary_key=True, comment='主键id')
+    orderId = Column(BigInteger, default=0, comment='订单ID')
     userId = Column(BigInteger, default=0, comment='用户ID')
     goodsId = Column(Integer, default=0, comment='商品ID')
     quantity = Column(Integer, default=0, comment='购买的数量')
@@ -86,7 +86,7 @@ class UserOrderJson(BaseModel):
 
 class OrderInfo(Base):
     __tablename__ = 'order'
-    orderId = Column(Integer, primary_key=True, comment='订单ID')
+    orderId = Column(BigInteger, primary_key=True, comment='订单ID')
     userId = Column(BigInteger, default=0, comment='用户ID')
     totalAmount = Column(Float, default=0, comment='订单总金额(单位：元)')
     receiptAddress = Column(String(255), default='', comment='订单收货地址')

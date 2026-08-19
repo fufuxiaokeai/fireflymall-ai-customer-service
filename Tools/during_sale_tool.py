@@ -56,7 +56,7 @@ async def _ensure_rabbit_ready():
             return channel
         rabbit_conn = await connect_robust(**_rabbit_params)
         channel = await rabbit_conn.channel()
-        exchange = await channel.declare_exchange(
+        await channel.declare_exchange(
             'order_exchange',
             ExchangeType.X_DELAYED_MESSAGE,  # 延迟消息
             durable=True,
@@ -64,7 +64,6 @@ async def _ensure_rabbit_ready():
         )
         queue = await channel.declare_queue('orders', durable=True)
         await queue.bind(
-            queue='orders',
             exchange='order_exchange',
             routing_key='orders'
         )
@@ -143,7 +142,7 @@ def get_order_info(
         ).filter(
             OrderInfo.userId == user_id,
             OrderInfo.payTime.isnot(None)
-        )
+        ).all()
 
         items = get_order_items_info(order_ids, session)
 
